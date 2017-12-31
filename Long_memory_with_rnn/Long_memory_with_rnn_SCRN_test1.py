@@ -5,6 +5,7 @@ Created on Sat Dec 30 22:00:35 2017
 @author: Lixiang
 """
 
+#%%
 #import package
 import numpy as np
 from matplotlib import pyplot as plt
@@ -14,18 +15,18 @@ import tqdm as tqdm
 import os
 
 
-###############################################################################
+#%%
 #data import parameter
 #filename_input = "words.txt"
 #filename_input = "words_total.txt"
-filename_input = "words_16.txt"
+#filename_input = "words_16.txt"
 #filename_input = "words_21.txt"
-#filename_input = "words_26.txt"
+filename_input = "words_26.txt"
 #filename_input = "words_42.txt"
 eval_steps = 2
 
 
-###############################################################################
+#%%
 #NN parameter
 input_size = 26 # one-hot input of characters
 s_size = 10 # size of context layer(slow)
@@ -40,24 +41,21 @@ Epochs = 6000 # number of epochs
 per_epoch = 100 # epochs to display loss and accuracy
 
 
-###############################################################################
+#%%
 # import data from dataset, articles or reviews
 with open(filename_input) as file_input:
     data_str = file_input.read()
 print('Import file: '+filename_input+' with Number of chars: ' + str(len(data_str)))
 
 
-###############################################################################
+#%%
 steps = int((len(data_str)-num_fw)/num_bp/batch_size)
 data_mat = np.asarray([ord(char)-ord('a') for char in data_str])
 
 train_data_len = int((steps-eval_steps)*num_bp*batch_size)
 eval_data_len = int(eval_steps*num_bp*batch_size)
 
-train_data_mat = np.zeros([train_data_len, num_fw])
 train_data_y = np.zeros([train_data_len])
-eval_data_x = np.zeros([eval_data_len, num_fw])
-eval_data_y = np.zeros([eval_data_len])
 train_data_x = list()
 train_data_y = list()
 eval_data_x = list()
@@ -86,15 +84,19 @@ for i in range(int(steps-eval_steps)):
     train_data_stepx.append(train_data_batchx[:, i*num_bp:(i+1)*num_bp, :])
     train_data_stepy.append(train_data_batchy[:, i*num_bp:(i+1)*num_bp])
     
+del train_data_batchx, train_data_batchy, train_data_x, train_data_y
+del data_str, data_mat 
 
-###############################################################################
+
+#%%
 print('Train data size: %d steps, %d batches, %d bps, %d fws'
       %(len(train_data_stepx), batch_size, num_bp, num_fw))
 print('Eval data size: %d'%(len(eval_data_x)))
 
 
-###############################################################################
+#%%
 # define structure of SCRN
+tf.reset_default_graph()
 trainX = list()
 trainY = list()
 for i in range(num_fw + num_bp):
@@ -157,7 +159,7 @@ for i in range(num_bp):
     outputs.append(y_after)
 
 
-###############################################################################
+#%%
 # train opt
 
 #log likelihood loss
@@ -183,7 +185,7 @@ gradients_clipped, _ = tf.clip_by_global_norm(gradients, 0.1)
 opt=optimizer.apply_gradients(zip(gradients_clipped,var),global_step=global_epoch)
 
 
-###############################################################################
+#%%
 #add init op to the graph
 train_filename = "SCRN_hsize_"+str(h_size)+"_ssize_"+str(s_size)+"_fw_"+str(num_fw)+"_bp_"+str(num_bp)+".ckpt"
 sess = tf.Session()
@@ -191,11 +193,14 @@ saver = tf.train.Saver()
 cwd = os.getcwd()
 
 
-###############################################################################
+#%%
 if os.path.isfile(train_filename+".index"):
     #load Vars
     saver.restore(sess, train_filename)
     print("Model restored from: %s" %(train_filename))
+    #check vars
+    #sess.run(global_epoch.initializer)
+    print('Global epochs: %s'%(global_epoch.eval(sess)))
 else:
     #init Vars
     init = tf.global_variables_initializer()
@@ -203,22 +208,21 @@ else:
     print("Initialize all Variables")
 
 
-###############################################################################
+#%%
 #init parameters
 d_loss = 1.0
 lr_ = lr
-outputs_series = list()
+#outputs_series = list()
 average_loss_series = list()
 
-
-###############################################################################
+#%%
 # train SCRN
 #lr_ = 0.1
 #per_epoch = 100
 #global_epoch = tf.Variable(0)
 #Epochs = 30000
 steps = len(train_data_stepy)
-pbar = tqdm(range(Epochs))
+pbar = tqdm.tqdm(range(Epochs))
 
 for epoch in range(Epochs):
     feed_dict = {}
@@ -270,21 +274,22 @@ for epoch in range(Epochs):
 
         #feed_dict[learning_rate] = 0.1
 
-        h_after_, s_after_, l ,outputs_, opt_ = sess.run([h_after, s_after, loss, outputs, opt], feed_dict=feed_dict)
-        outputs_series.append(outputs_)
+        h_after_, s_after_, l ,outputs_, opt_ = sess.run(
+                [h_after, s_after, loss, outputs, opt], feed_dict=feed_dict)
+        
         average_loss.append(l)
-        
+            
     ave_loss = sum(average_loss)/float(len(average_loss))
-        
+    del average_loss
+    del feed_dict
     average_loss_series.append(ave_loss)
         
     pbar.update(1)
 
-    #average_loss_series.append(ave_loss)
     global_epoch += 1
     if epoch%per_epoch == 0:
         
-        #average_loss_series.append(ave_loss)
+        average_loss_series.append(ave_loss)
         
         if epoch == 0:
             d_loss = average_loss_series[0]
@@ -301,28 +306,32 @@ for epoch in range(Epochs):
                 lr_ = 0.01
         
         
-        print('Epoch: '+str(epoch)+ ' Average Loss: ' +str(ave_loss) +
+        print('\n Epoch: '+str(epoch)+ ' Average Loss: ' +str(ave_loss) +
               ' Learning Rate: ' +str(lr_))
+        
+        #save training process:
+        save_train_path = saver.save(sess, cwd+"/"+train_filename)
+        print("Model saved in file: %s" % save_train_path)
     #if ave_loss<0.8:
     #    break
 
 pbar.close()
 
 
-###############################################################################
+#%%
 #save training process:
-save_train_path = saver.save(sess, cwd+"/"+train_filename)
-print("Model saved in file: %s" % save_train_path)
+#save_train_path = saver.save(sess, cwd+"/"+train_filename)
+#print("Model saved in file: %s" % save_train_path)
 
 
-###############################################################################
+#%%
 # plot tuning curve
 f1 = plt.figure()
 plt.plot(average_loss_series)
 plt.show(f1)
 
 
-###############################################################################
+#%%
 # predict and evaluate
 def eval_(data_x=eval_data_x, data_y=eval_data_y, num_fw=num_fw):
     evalX=[]
@@ -376,5 +385,5 @@ def eval_(data_x=eval_data_x, data_y=eval_data_y, num_fw=num_fw):
     return acc
 
 
-###############################################################################
+#%%
 acc =eval_()
