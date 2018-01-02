@@ -19,9 +19,9 @@ import os
 #data import parameter
 #filename_input = "words.txt"
 #filename_input = "words_total.txt"
-#filename_input = "words_16.txt"
+filename_input = "words_16.txt"
 #filename_input = "words_21.txt"
-filename_input = "words_26.txt"
+#filename_input = "words_26.txt"
 #filename_input = "words_42.txt"
 eval_steps = 2
 
@@ -37,7 +37,7 @@ num_fw = 5 # forward steps
 num_bp = 50 # 50 BPTT steps
 lr = 2.5 # initial learning rate
 batch_size = 32
-Epochs = 6000 # number of epochs
+Epochs = 3000 # number of epochs
 per_epoch = 100 # epochs to display loss and accuracy
 
 
@@ -84,7 +84,7 @@ for i in range(int(steps-eval_steps)):
     train_data_stepx.append(train_data_batchx[:, i*num_bp:(i+1)*num_bp, :])
     train_data_stepy.append(train_data_batchy[:, i*num_bp:(i+1)*num_bp])
     
-del train_data_batchx, train_data_batchy, train_data_x, train_data_y
+del train_data_batchx, train_data_batchy, train_data_x
 del data_str, data_mat 
 
 
@@ -336,6 +336,7 @@ plt.show(f1)
 def eval_(data_x=eval_data_x, data_y=eval_data_y, num_fw=num_fw):
     evalX=[]
     y_ = []
+    cy_ = []
     char_= list()
     for ii in range(num_fw):
         evalX.append(tf.placeholder(tf.float32, shape=(1, input_size)))
@@ -370,20 +371,30 @@ def eval_(data_x=eval_data_x, data_y=eval_data_y, num_fw=num_fw):
             feed_dict_eval[evalX[ii]] = data_x_i_onehot
             
         h_after_eval_, s_after_eval_, outputs_eval_, y_after_eval_= sess.run(
-            [h_after_eval, s_after_eval, outputs_eval, y_after_eval], feed_dict=feed_dict_eval)
+            [h_after_eval, s_after_eval, outputs_eval, y_after_eval], 
+            feed_dict=feed_dict_eval)
         
-        y_.append(chr(np.argmax(y_after_eval_)+ord('a')))
+        y_.append(np.argmax(y_after_eval_))
         
         if np.argmax(y_after_eval_) == data_y[step].reshape([]):
             acc_eva += 1
-            #print(y_[-1],chr(data_y[step]+ord('a')))
+            cy_.append(y_[-1])
             char_.append(y_[-1])
     
-    print('List of successfully recalled characters: %s' %(list(set(char_))))
+    f2 = plt.figure()
+    plt.hist(np.asarray(data_y), bins=26, label='Eval data')
+    plt.hist(np.asarray(y_), bins=26, label='Predict')
+    plt.hist(np.asarray(char_), bins=26, label='Correct predict')
+    plt.legend()
+    plt.show(f2)
+    f2.savefig('words16_3000Epochs_SCRN_hsize_40_ssize_10_fw_5_bp_50.png')
+    print('Predicted chars: %s'%([chr(ii+ord('a')) for ii in list(set(y_))]))
+    print('Sucessfully predicted chars: %s'%([chr(ii+ord('a')) for ii in list(set(cy_))]))
+    
     acc = acc_eva/len(data_y)
     print('Accuracy: %f'%(acc))
-    return acc
+    return acc, y_, cy_, char_
 
 
 #%%
-acc =eval_()
+acc, y_, cy_, char_ =eval_()
